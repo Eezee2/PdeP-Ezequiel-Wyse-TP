@@ -9,10 +9,11 @@ data Jugador = UnJugador {
   cantidadDinero :: Int,
   tactica :: String,
   propiedades ::[Propiedad],
-  acciones :: [(Jugador->Jugador)]
+  acciones :: [Accion]
 } deriving (Show)
 
 type Propiedad = (String,Int)
+type Accion = (Jugador->Jugador)
 
 suTactica::Jugador->String
 suTactica (UnJugador _ _ laTactica _ _) = laTactica
@@ -24,52 +25,75 @@ manuel:: Jugador
 manuel = UnJugador "Manuel" 500 "Oferente singular" [("",0)] [pasarPorElBanco]
 
 pasarPorElBanco:: Jugador->Jugador
-pasarPorElBanco unJugador = unJugador {cantidadDinero = cantidadDinero unJugador +40, tactica= "Comprador compulsivo"}
+pasarPorElBanco unJugador = ((modificarDinero 40).(modificarTactica "Comprador compulsivo")) unJugador
 
 enojarse::Jugador->Jugador
-enojarse unJugador = unJugador {cantidadDinero = cantidadDinero unJugador +50, acciones= acciones unJugador ++ [gritar]}
+enojarse unJugador = ((modificarDinero 50).(agregarAccion gritar)) unJugador
 
 gritar::Jugador->Jugador
 gritar unJugador = unJugador {nombre= "AHHHH" ++ nombre unJugador}
 
+esGanador::Jugador->Bool
+esGanador unJugador = any (==(suTactica unJugador)) ["Oferente singular","Accionista"]
 
 subastar::Jugador->Propiedad->Jugador
-subastar unJugador propiedadSubastada  | (suTactica unJugador) == "Oferente singular" = ganarPropiedad unJugador propiedadSubastada
-                                       | (suTactica unJugador) == "Accionista" = ganarPropiedad unJugador propiedadSubastada 
+subastar unJugador propiedadSubastada  | esGanador unJugador = ganarPropiedad unJugador propiedadSubastada
                                        | otherwise = unJugador
 
 ganarPropiedad::Jugador->Propiedad->Jugador
-ganarPropiedad unJugador propiedadSubastada = unJugador {cantidadDinero = cantidadDinero unJugador -(snd propiedadSubastada), propiedades = propiedades unJugador ++ [propiedadSubastada]}
+ganarPropiedad unJugador propiedadSubastada = (modificarDinero (-(snd propiedadSubastada)).(agregarPropiedad propiedadSubastada)) unJugador
 
 cobrarAlquileres::Jugador->Jugador
-cobrarAlquileres unJugador= unJugador {cantidadDinero = cantidadDinero unJugador + propiedadBarata (map snd (propiedades unJugador))}
+cobrarAlquileres unJugador= modificarDinero (totalACobrar (map snd (propiedades unJugador))) unJugador
 
-propiedadBarata:: [Int]->Int
-propiedadBarata listaValoresDePropiedades = (cuantasPropiedadesBaratas listaValoresDePropiedades)*10 + (cuantasPropiedadesCaras listaValoresDePropiedades)*20
+totalACobrar:: [Int]->Int
+totalACobrar listaValoresDePropiedades = (cuantasPropiedades (<150) listaValoresDePropiedades)*10 + (cuantasPropiedades (>=150) listaValoresDePropiedades)*20
 
-cuantasPropiedadesBaratas::[Int]->Int
-cuantasPropiedadesBaratas lista = (length (filter (<150) lista))
-
-cuantasPropiedadesCaras::[Int]->Int
-cuantasPropiedadesCaras lista = (length (filter (>=150) lista))
+cuantasPropiedades::(Int->Bool)->[Int]->Int
+cuantasPropiedades condicion lista = (length (filter condicion lista))
 
 pagarAAccionistas::Jugador->Jugador
-pagarAAccionistas unJugador  | (suTactica unJugador) == "Accionista" = unJugador {cantidadDinero = cantidadDinero unJugador +200}
-                             | otherwise                             = unJugador {cantidadDinero = cantidadDinero unJugador -100}
+pagarAAccionistas unJugador  | (suTactica unJugador) == "Accionista" = modificarDinero 200 unJugador
+                             | otherwise                             = modificarDinero (-100) unJugador
+
+hacerBerrinchePor::Propiedad->Jugador->Jugador
+hacerBerrinchePor propiedadNecesitada unJugador = puedeComprarla propiedadNecesitada (elBerrinche unJugador)
+
+puedeComprarla::Propiedad->Jugador->Jugador
+puedeComprarla propiedad unJugador | leAlcanza unJugador propiedad = ganarPropiedad unJugador propiedad
+                                   | otherwise = hacerBerrinchePor propiedad unJugador
+
+leAlcanza::Jugador->Propiedad->Bool
+leAlcanza unJugador propiedad=  (snd propiedad) <= (cantidadDinero unJugador)
+
+elBerrinche::Jugador->Jugador
+elBerrinche unJugador= ((modificarDinero 10).(agregarAccion gritar)) unJugador
+
+ultimaRonda:: Jugador->Accion
+ultimaRonda unJugador= foldr ((.)) pasarPorElBanco (acciones unJugador)
+
+juegoFinal::Jugador->Jugador->Jugador
+juegoFinal unJugador otroJugador |  cuantoDineroFinal unJugador > cuantoDineroFinal otroJugador = unJugador
+                                 | otherwise = otroJugador
+
+cuantoDineroFinal:: Jugador->Int
+cuantoDineroFinal unJugador= (cantidadDinero.aplicarAcciones) unJugador
+
+aplicarAcciones::Jugador->Jugador
+aplicarAcciones unJugador=(ultimaRonda unJugador) unJugador
+
+modificarDinero::Int->Jugador->Jugador
+modificarDinero monto unJugador = unJugador {cantidadDinero = ((cantidadDinero unJugador) +monto)}
+
+modificarTactica:: String->Jugador->Jugador
+modificarTactica nuevaTactica unJugador = unJugador {tactica= nuevaTactica}
+
+agregarAccion:: Accion->Jugador->Jugador
+agregarAccion nuevaAccion unJugador = unJugador {acciones= acciones unJugador ++ [nuevaAccion]}
+
+agregarPropiedad:: Propiedad->Jugador->Jugador
+agregarPropiedad nuevaPropiedad unJugador = unJugador {propiedades = propiedades unJugador ++ [nuevaPropiedad]}
 
 
---sumar10::Jugador->Jugador
---sumar10 unJugador = unJugador {cantidadDinero = cantidadDinero unJugador +10}
---sumar20::Jugador->Jugador
---sumar20 unJugador = unJugador {cantidadDinero = cantidadDinero unJugador +20}
 
---subastar::Jugador->Propiedad->Jugador
---subastar (UnJugador _ _ "Oferente singular" _ _)  = ganarPropiedad unJugador propiedadSubastada
---subastar (UnJugador _ _ "Accionista" _ _)         = ganarPropiedad unJugador propiedadSubastada
---subastar (UnJugador _ _ _ _ _)                    = unJugador
-
-
-
-
-
---stack ghci D:\Descargas\Facu2020\Paradigmas\Tps\TP3\TpMonopoly.hs
+--stack ghci D:\Descargas\Facu2020\Paradigmas\Tps\TP3\probando.hs
