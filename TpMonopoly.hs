@@ -70,7 +70,7 @@ elBerrinche::Jugador->Jugador
 elBerrinche unJugador= ((modificarDinero 10).(agregarAccion gritar)) unJugador
 
 ultimaRonda:: Jugador->Accion
-ultimaRonda unJugador= foldr ((.)) pasarPorElBanco (acciones unJugador)
+ultimaRonda unJugador= foldr1 ((.)) (acciones unJugador)
 
 juegoFinal::Jugador->Jugador->Jugador
 juegoFinal unJugador otroJugador |  cuantoDineroFinal unJugador > cuantoDineroFinal otroJugador = unJugador
